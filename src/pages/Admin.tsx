@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -49,13 +57,17 @@ import {
   Award,
   TrendingUp,
   Users,
-  BarChart,
   ArrowUp,
+  MoreHorizontal,
+  Search,
+  ArrowUpDown,
+  ExternalLink,
 } from "lucide-react";
 
-// University interface
+// University interface matching the provided data structure
 interface University {
   id: string;
+  key: number;
   title: string;
   city: string;
   province: string;
@@ -79,7 +91,6 @@ interface University {
   };
   deadline: string;
   admission: string;
-  meritHistory?: { year: number; merit: number }[];
 }
 
 // Disciplines and provinces options
@@ -96,6 +107,19 @@ const disciplines = [
   "Pharmacy",
 ];
 
+const degrees = [
+  "MBBS",
+  "BDS",
+  "BS Computer Science",
+  "BS Engineering",
+  "BS Business Administration",
+  "LLB",
+  "BS Arts",
+  "BS Sciences",
+  "BS Agriculture",
+  "Pharm-D",
+];
+
 const provinces = [
   "Punjab",
   "Sindh",
@@ -103,6 +127,7 @@ const provinces = [
   "Balochistan",
   "Gilgit-Baltistan",
   "AJK",
+  "Islamabad",
 ];
 
 const cities = [
@@ -122,13 +147,20 @@ const Admin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // State for universities list (simulated - would come from database)
+  // State
   const [universities, setUniversities] = useState<University[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingUniversity, setEditingUniversity] = useState<University | null>(null);
   const [viewingUniversity, setViewingUniversity] = useState<University | null>(null);
+  const [currentView, setCurrentView] = useState<"dashboard" | "all-universities">("dashboard");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterDiscipline, setFilterDiscipline] = useState("all");
+  const [sortBy, setSortBy] = useState<{ field: string; direction: "asc" | "desc" }>({
+    field: "title",
+    direction: "asc",
+  });
   
-  // Form state
+  // Form state matching exact data structure
   const [formData, setFormData] = useState<Partial<University>>({
     title: "",
     city: "",
@@ -151,8 +183,8 @@ const Admin = () => {
       long: 0,
       location: "",
     },
-    deadline: "",
-    admission: "Open",
+    deadline: "<NA>",
+    admission: "nan",
   });
 
   // Stats data
@@ -167,7 +199,7 @@ const Admin = () => {
     },
     {
       title: "Active Admissions",
-      value: universities.filter((u) => u.admission === "Open").length,
+      value: universities.filter((u) => u.status === 1).length,
       change: 8,
       trend: "up",
       period: "from last month",
@@ -193,6 +225,29 @@ const Admin = () => {
     },
   ];
 
+  // Get recent 5 universities
+  const recentUniversities = [...universities].slice(-5).reverse();
+
+  // Filter and sort universities for all-universities view
+  const filteredUniversities = universities
+    .filter(
+      (uni) =>
+        (uni.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          uni.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          uni.discipline.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (filterDiscipline === "all" || uni.discipline === filterDiscipline)
+    )
+    .sort((a, b) => {
+      const field = sortBy.field as keyof University;
+      const aVal = a[field];
+      const bVal = b[field];
+      if (sortBy.direction === "asc") {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+
   // Reset form
   const resetForm = () => {
     setFormData({
@@ -217,8 +272,8 @@ const Admin = () => {
         long: 0,
         location: "",
       },
-      deadline: "",
-      admission: "Open",
+      deadline: "<NA>",
+      admission: "nan",
     });
     setEditingUniversity(null);
   };
@@ -237,11 +292,10 @@ const Admin = () => {
     }
 
     if (editingUniversity) {
-      // Update existing university
       setUniversities((prev) =>
         prev.map((u) =>
           u.id === editingUniversity.id
-            ? { ...u, ...formData, id: u.id }
+            ? { ...u, ...formData, id: u.id, key: u.key }
             : u
         )
       );
@@ -250,10 +304,11 @@ const Admin = () => {
         description: `${formData.title} has been updated successfully.`,
       });
     } else {
-      // Add new university
+      const newKey = universities.length;
       const newUniversity: University = {
         ...formData,
-        id: `pk${Date.now()}`,
+        id: `pk${newKey}`,
+        key: newKey,
         map: formData.map || { address: "", lat: 0, long: 0, location: formData.city || "" },
       } as University;
       
@@ -284,16 +339,43 @@ const Admin = () => {
     });
   };
 
-  // Get status badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Open":
-        return <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30">Open</Badge>;
-      case "Closed":
-        return <Badge className="bg-destructive/20 text-destructive border-destructive/30">Closed</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+  // Handle sort
+  const handleSort = (field: string) => {
+    if (sortBy.field === field) {
+      setSortBy({
+        field,
+        direction: sortBy.direction === "asc" ? "desc" : "asc",
+      });
+    } else {
+      setSortBy({
+        field,
+        direction: "asc",
+      });
     }
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: number) => {
+    if (status === 1) {
+      return <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30">Active</Badge>;
+    }
+    return <Badge className="bg-destructive/20 text-destructive border-destructive/30">Inactive</Badge>;
+  };
+
+  // Get discipline badge
+  const getDisciplineBadge = (discipline: string) => {
+    const colors: Record<string, string> = {
+      Medical: "bg-red-500/20 text-red-600",
+      Engineering: "bg-blue-500/20 text-blue-600",
+      "Computer Science": "bg-purple-500/20 text-purple-600",
+      Business: "bg-green-500/20 text-green-600",
+      Law: "bg-amber-500/20 text-amber-600",
+    };
+    return (
+      <Badge className={colors[discipline] || "bg-gray-500/20 text-gray-600"}>
+        {discipline}
+      </Badge>
+    );
   };
 
   return (
@@ -306,7 +388,13 @@ const Admin = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate("/")}
+                onClick={() => {
+                  if (currentView === "all-universities") {
+                    setCurrentView("dashboard");
+                  } else {
+                    navigate("/");
+                  }
+                }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <ArrowLeft className="h-5 w-5" />
@@ -317,7 +405,9 @@ const Admin = () => {
                 </div>
                 <div>
                   <h1 className="text-lg font-bold text-foreground">CampusFinder</h1>
-                  <p className="text-xs text-muted-foreground">Admin Portal</p>
+                  <p className="text-xs text-muted-foreground">
+                    {currentView === "dashboard" ? "Admin Dashboard" : "All Universities"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -336,169 +426,361 @@ const Admin = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8">
-        {/* Page Title */}
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Admin Dashboard</h2>
-          <p className="text-muted-foreground mt-1">Manage universities and admission data</p>
-        </div>
+        {currentView === "dashboard" ? (
+          <>
+            {/* Page Title */}
+            <div>
+              <h2 className="text-2xl font-bold text-foreground">Admin Dashboard</h2>
+              <p className="text-muted-foreground mt-1">Manage universities and admission data</p>
+            </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, i) => (
-            <Card key={i} className="border-border/50 bg-card/80 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <stat.icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex items-center gap-1 text-emerald-600 text-sm font-medium">
-                    {stat.change}%
-                    <ArrowUp className="h-3 w-3" />
-                  </div>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {stats.map((stat, i) => (
+                <Card key={i} className="border-border/50 bg-card/80 backdrop-blur-sm">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <stat.icon className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex items-center gap-1 text-emerald-600 text-sm font-medium">
+                        {stat.change}%
+                        <ArrowUp className="h-3 w-3" />
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <h3 className="text-2xl font-bold text-foreground">{stat.value}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{stat.title}</p>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {stat.change}% {stat.trend} {stat.period}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Recent Universities */}
+            <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-foreground">Recent Universities</CardTitle>
+                  <CardDescription>Latest universities added to the system</CardDescription>
                 </div>
-                <div className="mt-4">
-                  <h3 className="text-2xl font-bold text-foreground">{stat.value}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{stat.title}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentView("all-universities")}
+                >
+                  View All
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50 hover:bg-muted/50">
+                        <TableHead className="text-foreground font-semibold">University</TableHead>
+                        <TableHead className="text-foreground font-semibold hidden md:table-cell">City</TableHead>
+                        <TableHead className="text-foreground font-semibold hidden lg:table-cell">Discipline</TableHead>
+                        <TableHead className="text-foreground font-semibold hidden lg:table-cell">Merit</TableHead>
+                        <TableHead className="text-foreground font-semibold hidden md:table-cell">Fee</TableHead>
+                        <TableHead className="text-foreground font-semibold">Status</TableHead>
+                        <TableHead className="text-foreground font-semibold w-[50px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentUniversities.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-32 text-center">
+                            <div className="flex flex-col items-center gap-2">
+                              <Building className="h-8 w-8 text-muted-foreground/50" />
+                              <p className="text-muted-foreground">No universities added yet</p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  resetForm();
+                                  setShowAddForm(true);
+                                }}
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add First University
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        recentUniversities.map((university) => (
+                          <TableRow key={university.id} className="hover:bg-muted/30">
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarImage src={university.logo} alt={university.title} />
+                                  <AvatarFallback className="bg-primary/10 text-primary">
+                                    {university.title.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium text-foreground line-clamp-1">
+                                    {university.title}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {university.degree}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <MapPin className="h-3 w-3" />
+                                {university.city}
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell">
+                              {getDisciplineBadge(university.discipline)}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell">
+                              <span className="font-medium text-primary">{university.merit}%</span>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <span className="text-muted-foreground">
+                                PKR {university.fee.toLocaleString()}
+                              </span>
+                            </TableCell>
+                            <TableCell>{getStatusBadge(university.status)}</TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => setViewingUniversity(university)}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleEdit(university)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => handleDelete(university.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {stat.change}% {stat.trend} {stat.period}
-                </p>
               </CardContent>
             </Card>
-          ))}
-        </div>
-
-        {/* Universities Table */}
-        <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
-          <CardHeader className="flex flex-row items-center justify-between">
+          </>
+        ) : (
+          <>
+            {/* All Universities View */}
             <div>
-              <CardTitle className="text-foreground">Universities</CardTitle>
-              <CardDescription>Manage all registered universities</CardDescription>
+              <h2 className="text-2xl font-bold text-foreground">All Universities</h2>
+              <p className="text-muted-foreground mt-1">Complete list of registered universities</p>
             </div>
-            <Badge variant="outline" className="text-muted-foreground">
-              {universities.length} Total
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="text-foreground font-semibold">University</TableHead>
-                    <TableHead className="text-foreground font-semibold hidden md:table-cell">City</TableHead>
-                    <TableHead className="text-foreground font-semibold hidden lg:table-cell">Discipline</TableHead>
-                    <TableHead className="text-foreground font-semibold hidden lg:table-cell">Merit</TableHead>
-                    <TableHead className="text-foreground font-semibold hidden md:table-cell">Fee</TableHead>
-                    <TableHead className="text-foreground font-semibold">Status</TableHead>
-                    <TableHead className="text-foreground font-semibold w-[120px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {universities.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-32 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <Building className="h-8 w-8 text-muted-foreground/50" />
-                          <p className="text-muted-foreground">No universities added yet</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              resetForm();
-                              setShowAddForm(true);
-                            }}
+
+            <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="text-foreground">Universities</CardTitle>
+                <CardDescription>Manage all registered universities</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Filters */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search universities..."
+                      className="pl-8 bg-background border-border"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-full md:w-48">
+                    <Select value={filterDiscipline} onValueChange={setFilterDiscipline}>
+                      <SelectTrigger className="bg-background border-border">
+                        <SelectValue placeholder="Filter by discipline" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Disciplines</SelectItem>
+                        {disciplines.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50 hover:bg-muted/50">
+                        <TableHead className="w-[300px]">
+                          <div
+                            className="flex items-center cursor-pointer text-foreground font-semibold"
+                            onClick={() => handleSort("title")}
                           >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add First University
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    universities.map((university) => (
-                      <TableRow key={university.id} className="hover:bg-muted/30">
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                              {university.logo ? (
-                                <img
-                                  src={university.logo}
-                                  alt={university.title}
-                                  className="h-full w-full object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <GraduationCap className="h-5 w-5 text-primary" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="font-medium text-foreground line-clamp-1">
-                                {university.title}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {university.degree}
-                              </div>
-                            </div>
+                            University
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
                           </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            {university.city}
+                        </TableHead>
+                        <TableHead className="text-foreground font-semibold">Discipline</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          <div
+                            className="flex items-center cursor-pointer text-foreground font-semibold"
+                            onClick={() => handleSort("merit")}
+                          >
+                            Merit
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
                           </div>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <Badge variant="secondary" className="text-xs">
-                            {university.discipline}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <span className="font-medium text-primary">{university.merit}%</span>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <span className="text-muted-foreground">
-                            PKR {university.fee.toLocaleString()}
-                          </span>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(university.admission)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-primary"
-                              onClick={() => setViewingUniversity(university)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-accent"
-                              onClick={() => handleEdit(university)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDelete(university.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          <div
+                            className="flex items-center cursor-pointer text-foreground font-semibold"
+                            onClick={() => handleSort("fee")}
+                          >
+                            Fee (PKR)
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
                           </div>
-                        </TableCell>
+                        </TableHead>
+                        <TableHead className="hidden lg:table-cell text-foreground font-semibold">
+                          Ranking
+                        </TableHead>
+                        <TableHead className="text-foreground font-semibold">Status</TableHead>
+                        <TableHead className="w-[80px] text-foreground font-semibold">Actions</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUniversities.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-32 text-center">
+                            <div className="flex flex-col items-center gap-2">
+                              <Building className="h-8 w-8 text-muted-foreground/50" />
+                              <p className="text-muted-foreground">No universities found</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredUniversities.map((university) => (
+                          <TableRow
+                            key={university.id}
+                            className="hover:bg-muted/30 cursor-pointer"
+                            onClick={() => setViewingUniversity(university)}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarImage src={university.logo} alt={university.title} />
+                                  <AvatarFallback className="bg-primary/10 text-primary">
+                                    {university.title.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium text-foreground line-clamp-1">
+                                    {university.title}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {university.city}, {university.province}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getDisciplineBadge(university.discipline)}</TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <span className="font-medium text-primary">{university.merit}%</span>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <span className="text-muted-foreground">
+                                {university.fee.toLocaleString()}
+                              </span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell">
+                              <span className="text-muted-foreground">#{university.ranking}</span>
+                            </TableCell>
+                            <TableCell>{getStatusBadge(university.status)}</TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setViewingUniversity(university);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEdit(university);
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete(university.id);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination Info */}
+                <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">
+                  <div>
+                    Showing {filteredUniversities.length} of {universities.length} universities
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled>
+                      Previous
+                    </Button>
+                    <Button variant="outline" size="sm" disabled>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </main>
 
       {/* Add/Edit University Dialog */}
@@ -535,19 +817,27 @@ const Admin = () => {
                       id="title"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      placeholder="e.g., National University of Sciences and Technology"
+                      placeholder="e.g., Federal Urdu University of Arts, Sciences & Technology"
                       className="bg-background border-border"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="degree" className="text-foreground">Degree Program</Label>
-                    <Input
-                      id="degree"
+                    <Select
                       value={formData.degree}
-                      onChange={(e) => setFormData({ ...formData, degree: e.target.value })}
-                      placeholder="e.g., MBBS, BS Computer Science"
-                      className="bg-background border-border"
-                    />
+                      onValueChange={(value) => setFormData({ ...formData, degree: value })}
+                    >
+                      <SelectTrigger className="bg-background border-border">
+                        <SelectValue placeholder="Select degree" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {degrees.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="discipline" className="text-foreground">
@@ -623,14 +913,14 @@ const Admin = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="md:col-span-1 space-y-2">
+                  <div className="space-y-2">
                     <Label htmlFor="ranking" className="text-foreground">Ranking</Label>
                     <Input
                       id="ranking"
                       type="number"
                       value={formData.ranking}
                       onChange={(e) => setFormData({ ...formData, ranking: parseInt(e.target.value) || 0 })}
-                      placeholder="e.g., 5"
+                      placeholder="e.g., 47"
                       className="bg-background border-border"
                     />
                   </div>
@@ -646,10 +936,46 @@ const Admin = () => {
                         map: { ...formData.map!, address: e.target.value },
                       })
                     }
-                    placeholder="Complete address of the university"
+                    placeholder="e.g., M3XC+79J, Kuri Model Village, G-7, Islamabad"
                     className="bg-background border-border resize-none"
                     rows={2}
                   />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="lat" className="text-foreground">Latitude</Label>
+                    <Input
+                      id="lat"
+                      type="number"
+                      step="0.000001"
+                      value={formData.map?.lat}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          map: { ...formData.map!, lat: parseFloat(e.target.value) || 0 },
+                        })
+                      }
+                      placeholder="e.g., 33.6844"
+                      className="bg-background border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="long" className="text-foreground">Longitude</Label>
+                    <Input
+                      id="long"
+                      type="number"
+                      step="0.000001"
+                      value={formData.map?.long}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          map: { ...formData.map!, long: parseFloat(e.target.value) || 0 },
+                        })
+                      }
+                      placeholder="e.g., 73.0479"
+                      className="bg-background border-border"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -670,7 +996,7 @@ const Admin = () => {
                       max="100"
                       value={formData.merit}
                       onChange={(e) => setFormData({ ...formData, merit: parseFloat(e.target.value) || 0 })}
-                      placeholder="e.g., 85.5"
+                      placeholder="e.g., 92.0"
                       className="bg-background border-border"
                     />
                   </div>
@@ -681,35 +1007,56 @@ const Admin = () => {
                       type="number"
                       value={formData.fee}
                       onChange={(e) => setFormData({ ...formData, fee: parseInt(e.target.value) || 0 })}
-                      placeholder="e.g., 150000"
+                      placeholder="e.g., 42620"
                       className="bg-background border-border"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admissions" className="text-foreground">Admissions</Label>
+                    <Input
+                      id="admissions"
+                      value={formData.admissions}
+                      onChange={(e) => setFormData({ ...formData, admissions: e.target.value })}
+                      placeholder="e.g., 1.0"
+                      className="bg-background border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="status" className="text-foreground">Status</Label>
+                    <Select
+                      value={String(formData.status)}
+                      onValueChange={(value) => setFormData({ ...formData, status: parseInt(value) })}
+                    >
+                      <SelectTrigger className="bg-background border-border">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Active</SelectItem>
+                        <SelectItem value="0">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="deadline" className="text-foreground">Deadline</Label>
                     <Input
                       id="deadline"
                       value={formData.deadline}
                       onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                      placeholder="e.g., January 2025"
+                      placeholder="e.g., January 2025 or <NA>"
                       className="bg-background border-border"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="admission" className="text-foreground">Status</Label>
-                    <Select
+                    <Label htmlFor="admission" className="text-foreground">Admission Info</Label>
+                    <Input
+                      id="admission"
                       value={formData.admission}
-                      onValueChange={(value) => setFormData({ ...formData, admission: value })}
-                    >
-                      <SelectTrigger className="bg-background border-border">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Open">Open</SelectItem>
-                        <SelectItem value="Closed">Closed</SelectItem>
-                        <SelectItem value="Coming Soon">Coming Soon</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      onChange={(e) => setFormData({ ...formData, admission: e.target.value })}
+                      placeholder="e.g., Open, Closed, nan"
+                      className="bg-background border-border"
+                    />
                   </div>
                 </div>
               </div>
@@ -727,7 +1074,7 @@ const Admin = () => {
                       id="contact"
                       value={formData.contact}
                       onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-                      placeholder="e.g., (051) 9064-3000"
+                      placeholder="e.g., (051) 9252860"
                       className="bg-background border-border"
                     />
                   </div>
@@ -738,7 +1085,7 @@ const Admin = () => {
                       type="email"
                       value={formData.info}
                       onChange={(e) => setFormData({ ...formData, info: e.target.value })}
-                      placeholder="e.g., info@university.edu.pk"
+                      placeholder="e.g., info@mite.edu.pk"
                       className="bg-background border-border"
                     />
                   </div>
@@ -748,7 +1095,7 @@ const Admin = () => {
                       id="web"
                       value={formData.web}
                       onChange={(e) => setFormData({ ...formData, web: e.target.value })}
-                      placeholder="e.g., https://www.university.edu.pk"
+                      placeholder="e.g., http://www.uom.edu.pk/"
                       className="bg-background border-border"
                     />
                   </div>
@@ -768,7 +1115,7 @@ const Admin = () => {
                       id="logo"
                       value={formData.logo}
                       onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
-                      placeholder="https://..."
+                      placeholder="https://www.university.edu.pk/logo.png"
                       className="bg-background border-border"
                     />
                   </div>
@@ -778,7 +1125,7 @@ const Admin = () => {
                       id="url"
                       value={formData.url}
                       onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                      placeholder="https://..."
+                      placeholder="https://firebasestorage.googleapis.com/..."
                       className="bg-background border-border"
                     />
                   </div>
@@ -812,19 +1159,19 @@ const Admin = () => {
         <DialogContent className="max-w-2xl bg-card border-border">
           <DialogHeader>
             <DialogTitle className="text-foreground flex items-center gap-3">
-              {viewingUniversity?.logo && (
-                <img
-                  src={viewingUniversity.logo}
-                  alt=""
-                  className="h-10 w-10 rounded-lg object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                />
-              )}
-              {viewingUniversity?.title}
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={viewingUniversity?.logo} alt={viewingUniversity?.title} />
+                <AvatarFallback className="bg-primary/10 text-primary">
+                  {viewingUniversity?.title?.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="line-clamp-1">{viewingUniversity?.title}</div>
+                <div className="text-sm font-normal text-muted-foreground">
+                  {viewingUniversity?.degree}
+                </div>
+              </div>
             </DialogTitle>
-            <DialogDescription>{viewingUniversity?.degree}</DialogDescription>
           </DialogHeader>
 
           {viewingUniversity && (
@@ -838,7 +1185,7 @@ const Admin = () => {
                       {viewingUniversity.city}, {viewingUniversity.province}
                     </div>
                     <p className="text-sm text-muted-foreground pl-6">
-                      {viewingUniversity.map?.address}
+                      {viewingUniversity.map?.address || "Address not available"}
                     </p>
                   </div>
                 </div>
@@ -856,12 +1203,18 @@ const Admin = () => {
                       </span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ranking</span>
+                      <span className="text-foreground">#{viewingUniversity.ranking}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Deadline</span>
-                      <span className="text-foreground">{viewingUniversity.deadline || "N/A"}</span>
+                      <span className="text-foreground">
+                        {viewingUniversity.deadline === "<NA>" ? "N/A" : viewingUniversity.deadline}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Status</span>
-                      {getStatusBadge(viewingUniversity.admission)}
+                      {getStatusBadge(viewingUniversity.status)}
                     </div>
                   </div>
                 </div>
@@ -880,28 +1233,49 @@ const Admin = () => {
                     </div>
                     <div className="flex items-center gap-2 text-foreground">
                       <Globe className="h-4 w-4 text-primary" />
-                      <a
-                        href={viewingUniversity.web}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline truncate"
-                      >
-                        {viewingUniversity.web || "N/A"}
-                      </a>
+                      {viewingUniversity.web ? (
+                        <a
+                          href={viewingUniversity.web}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline flex items-center gap-1"
+                        >
+                          Visit Website
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        "N/A"
+                      )}
                     </div>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Additional Info</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Quick Actions</h3>
                   <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Ranking</span>
-                      <span className="text-foreground">#{viewingUniversity.ranking}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Discipline</span>
-                      <Badge variant="secondary">{viewingUniversity.discipline}</Badge>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        setViewingUniversity(null);
+                        handleEdit(viewingUniversity);
+                      }}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit University
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-destructive hover:text-destructive"
+                      onClick={() => {
+                        handleDelete(viewingUniversity.id);
+                        setViewingUniversity(null);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete University
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -911,18 +1285,6 @@ const Admin = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewingUniversity(null)}>
               Close
-            </Button>
-            <Button
-              onClick={() => {
-                if (viewingUniversity) {
-                  handleEdit(viewingUniversity);
-                  setViewingUniversity(null);
-                }
-              }}
-              className="gradient-hero text-primary-foreground"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit University
             </Button>
           </DialogFooter>
         </DialogContent>
