@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,279 +16,63 @@ import {
 } from "lucide-react";
 import { University } from "./Index";
 
-// Import universities data
-const universities: University[] = [
-  {
-    id: "pk0",
-    title: "Federal Urdu University of Arts, Sciences & Technology, Islamabad",
-    city: "Islamabad",
-    province: "Punjab",
-    degree: "MBBS",
-    discipline: "Medical",
-    fee: 42620,
-    merit: 92.0,
-    ranking: 47,
-    status: 1,
-    contact: "(051) 9252860",
-    info: "info@mite.edu.pk",
-    web: "http://www.fuuast.edu.pk/",
-    url: "https://firebasestorage.googleapis.com/v0/b/campusfinder-6c74d.appspot.com/o/university_listing%2Fdownload%20(1).jpeg?alt=media&token=5339f81e-2e01-4460-bc48-d00888d984eb",
-    logo: "https://www.fuuastisb.edu.pk/images/logonew.png",
-    admissions: "1.0",
-    map: {
-      address: "M3XC+79J, Kuri Model Village, Mozah Mohrian, 5B, near Bahria Enclave Road, G 7/1 G-7, Islamabad",
-      lat: 33.6686,
-      long: 72.0602,
-      location: "Islamabad",
-    },
-    deadline: "December 2024",
-    admission: "Open",
-  },
-  {
-    id: "pk1",
-    title: "Quaid-i-Azam University, Islamabad",
-    city: "Islamabad",
-    province: "Punjab",
-    degree: "BS Computer Science",
-    discipline: "Computer Science",
-    fee: 35000,
-    merit: 88.5,
-    ranking: 3,
-    status: 1,
-    contact: "(051) 9064-3000",
-    info: "info@qau.edu.pk",
-    web: "https://www.qau.edu.pk/",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Quaid-i-Azam_University_Campus.jpg/1200px-Quaid-i-Azam_University_Campus.jpg",
-    logo: "https://www.qau.edu.pk/wp-content/uploads/2021/09/QAU-Logo.png",
-    admissions: "1.0",
-    map: {
-      address: "Quaid-i-Azam University, Islamabad 45320",
-      lat: 33.7470,
-      long: 73.1371,
-      location: "Islamabad",
-    },
-    deadline: "January 2025",
-    admission: "Open",
-  },
-  {
-    id: "pk2",
-    title: "COMSATS University Islamabad",
-    city: "Islamabad",
-    province: "Punjab",
-    degree: "BS Software Engineering",
-    discipline: "Computer Science",
-    fee: 125000,
-    merit: 75.0,
-    ranking: 8,
-    status: 1,
-    contact: "(051) 9049-5000",
-    info: "admissions@comsats.edu.pk",
-    web: "https://www.comsats.edu.pk/",
-    url: "https://www.comsats.edu.pk/images/slider/slider1.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/d/d8/COMSATS_new_logo.jpg",
-    admissions: "1.0",
-    map: {
-      address: "Park Road, Tarlai Kalan, Islamabad 45550",
-      lat: 33.6526,
-      long: 73.1569,
-      location: "Islamabad",
-    },
-    deadline: "November 2024",
-    admission: "Open",
-  },
-  {
-    id: "pk3",
-    title: "National University of Sciences and Technology (NUST)",
-    city: "Islamabad",
-    province: "Punjab",
-    degree: "BS Electrical Engineering",
-    discipline: "Engineering",
-    fee: 185000,
-    merit: 85.0,
-    ranking: 1,
-    status: 1,
-    contact: "(051) 9085-5000",
-    info: "admissions@nust.edu.pk",
-    web: "https://nust.edu.pk/",
-    url: "https://nust.edu.pk/wp-content/uploads/2021/10/nust-campus.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/3/3e/NUST_logo.png",
-    admissions: "1.0",
-    map: {
-      address: "H-12, Islamabad 44000",
-      lat: 33.6425,
-      long: 72.9903,
-      location: "Islamabad",
-    },
-    deadline: "October 2024",
-    admission: "Closed",
-  },
-  {
-    id: "pk4",
-    title: "Lahore University of Management Sciences (LUMS)",
-    city: "Lahore",
-    province: "Punjab",
-    degree: "BBA",
-    discipline: "Business",
-    fee: 450000,
-    merit: 90.0,
-    ranking: 2,
-    status: 1,
-    contact: "(042) 3560-8000",
-    info: "admissions@lums.edu.pk",
-    web: "https://lums.edu.pk/",
-    url: "https://lums.edu.pk/sites/default/files/styles/full_width/public/2021-03/lums-campus.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/8/86/LUMS_logo.png",
-    admissions: "1.0",
-    map: {
-      address: "DHA, Lahore Cantt. 54792",
-      lat: 31.4697,
-      long: 74.4072,
-      location: "Lahore",
-    },
-    deadline: "January 2025",
-    admission: "Open",
-  },
-  {
-    id: "pk5",
-    title: "University of Engineering and Technology (UET) Lahore",
-    city: "Lahore",
-    province: "Punjab",
-    degree: "BS Civil Engineering",
-    discipline: "Engineering",
-    fee: 65000,
-    merit: 82.0,
-    ranking: 5,
-    status: 1,
-    contact: "(042) 9902-9000",
-    info: "info@uet.edu.pk",
-    web: "https://uet.edu.pk/",
-    url: "https://uet.edu.pk/images/campus.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/f/f3/University_of_Engineering_and_Technology_logo.png",
-    admissions: "1.0",
-    map: {
-      address: "G.T. Road, Lahore 54890",
-      lat: 31.5815,
-      long: 74.3575,
-      location: "Lahore",
-    },
-    deadline: "December 2024",
-    admission: "Open",
-  },
-  {
-    id: "pk6",
-    title: "Aga Khan University, Karachi",
-    city: "Karachi",
-    province: "Sindh",
-    degree: "MBBS",
-    discipline: "Medical",
-    fee: 550000,
-    merit: 95.0,
-    ranking: 4,
-    status: 1,
-    contact: "(021) 111-911-911",
-    info: "admissions@aku.edu",
-    web: "https://www.aku.edu/",
-    url: "https://www.aku.edu/siteassets/images/aku-karachi.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/5/5a/Aga_Khan_University_logo.png",
-    admissions: "1.0",
-    map: {
-      address: "Stadium Road, Karachi 74800",
-      lat: 24.8907,
-      long: 67.0742,
-      location: "Karachi",
-    },
-    deadline: "November 2024",
-    admission: "Open",
-  },
-  {
-    id: "pk7",
-    title: "Institute of Business Administration (IBA) Karachi",
-    city: "Karachi",
-    province: "Sindh",
-    degree: "BBA",
-    discipline: "Business",
-    fee: 380000,
-    merit: 88.0,
-    ranking: 6,
-    status: 1,
-    contact: "(021) 111-422-422",
-    info: "admissions@iba.edu.pk",
-    web: "https://www.iba.edu.pk/",
-    url: "https://www.iba.edu.pk/images/campus.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/f/f4/IBA_Karachi_logo.png",
-    admissions: "1.0",
-    map: {
-      address: "University Road, Karachi 75270",
-      lat: 24.9407,
-      long: 67.1111,
-      location: "Karachi",
-    },
-    deadline: "January 2025",
-    admission: "Open",
-  },
-  {
-    id: "pk10",
-    title: "FAST National University of Computer and Emerging Sciences",
-    city: "Islamabad",
-    province: "Punjab",
-    degree: "BS Computer Science",
-    discipline: "Computer Science",
-    fee: 195000,
-    merit: 80.0,
-    ranking: 7,
-    status: 1,
-    contact: "(051) 111-128-128",
-    info: "admissions@nu.edu.pk",
-    web: "https://www.nu.edu.pk/",
-    url: "https://www.nu.edu.pk/images/campus.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/5/5a/FAST_NUCES_logo.png",
-    admissions: "1.0",
-    map: {
-      address: "A.K. Brohi Road, H-11/4, Islamabad",
-      lat: 33.6802,
-      long: 72.9875,
-      location: "Islamabad",
-    },
-    deadline: "November 2024",
-    admission: "Open",
-  },
-  {
-    id: "pk11",
-    title: "Government College University Lahore",
-    city: "Lahore",
-    province: "Punjab",
-    degree: "BS English Literature",
-    discipline: "Arts",
-    fee: 32000,
-    merit: 78.0,
-    ranking: 10,
-    status: 1,
-    contact: "(042) 9921-3340",
-    info: "info@gcu.edu.pk",
-    web: "https://www.gcu.edu.pk/",
-    url: "https://www.gcu.edu.pk/images/campus.jpg",
-    logo: "https://upload.wikimedia.org/wikipedia/en/d/d7/Government_College_University_Lahore_logo.png",
-    admissions: "1.0",
-    map: {
-      address: "Katchery Road, Lahore 54000",
-      lat: 31.5615,
-      long: 74.3235,
-      location: "Lahore",
-    },
-    deadline: "December 2024",
-    admission: "Open",
-  },
-];
-
 const RankingSearch = () => {
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchedUniversity, setSearchedUniversity] = useState<University | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Load universities from JSON
+  useEffect(() => {
+    const loadUniversitiesData = async () => {
+      try {
+        const response = await fetch('/campusfinder_cleaned.json');
+        const data = await response.json();
+        
+        // Transform the data to match University interface
+        const transformedData: University[] = data.map((uni: any) => ({
+          id: `pk${uni.key}`,
+          title: uni.title,
+          city: uni.city,
+          province: uni.province,
+          degree: uni.degree,
+          discipline: uni.discipline,
+          fee: uni.fee,
+          merit: uni.merit,
+          ranking: uni.ranking,
+          status: uni.status,
+          contact: uni.contact,
+          info: uni.info,
+          web: uni.web,
+          url: uni.url,
+          logo: uni.logo,
+          admissions: uni.admissions,
+          map: {
+            address: uni['map.address'] || '',
+            lat: uni['map.lat'] || 0,
+            long: uni['map.long'] || 0,
+            location: uni['map.location'] || uni.city,
+          },
+          deadline: uni.deadline,
+          admission: uni.admission,
+        }));
+
+        setUniversities(transformedData);
+      } catch (error) {
+        console.error("Error loading universities:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUniversitiesData();
+  }, []);
+
   // Top 5 universities by ranking
   const top5Universities = useMemo(() => {
     return [...universities].sort((a, b) => a.ranking - b.ranking).slice(0, 5);
-  }, []);
+  }, [universities]);
 
   // Search for university
   const handleSearch = () => {
@@ -308,6 +92,17 @@ const RankingSearch = () => {
     if (rank === 3) return <Medal className="h-6 w-6 text-amber-600" />;
     return <Award className="h-5 w-5 text-secondary" />;
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <GraduationCap className="h-12 w-12 mx-auto mb-4 text-secondary animate-pulse" />
+          <p className="text-muted-foreground">Loading rankings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -496,7 +291,7 @@ const RankingSearch = () => {
                       </div>
                     </div>
 
-                    {/* Rank Icon */}
+                    {/* Trophy Icon */}
                     <div className="flex-shrink-0">
                       {getRankIcon(uni.ranking)}
                     </div>
