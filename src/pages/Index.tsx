@@ -662,10 +662,16 @@ const Header = ({ favoritesCount, onShowFavorites }: HeaderProps) => {
             Universities
           </a>
           <a
-            href="#compare"
+            href="/ranking-search"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            Compare
+            Rankings
+          </a>
+          <a
+            href="/discipline-search"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Disciplines
           </a>
           <a
             href="#about"
@@ -729,11 +735,18 @@ const Header = ({ favoritesCount, onShowFavorites }: HeaderProps) => {
             Universities
           </a>
           <a
-            href="#compare"
+            href="/ranking-search"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-2"
             onClick={() => setMobileMenuOpen(false)}
           >
-            Compare
+            Rankings
+          </a>
+          <a
+            href="/discipline-search"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-2"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Disciplines
           </a>
           <a
             href="#about"
@@ -2159,6 +2172,7 @@ const Index = () => {
   const [showCompare, setShowCompare] = useState(false);
   const [selectedUniversity, setSelectedUniversity] =
     useState<University | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Filter universities
   const filteredUniversities = useMemo(() => {
@@ -2276,6 +2290,17 @@ const Index = () => {
     city: string;
     discipline: string;
   }) => {
+    // Check if all fields are filled
+    if (!eligibility.marks || !eligibility.maxFee || !eligibility.city || !eligibility.discipline) {
+      toast({
+        title: "All fields required",
+        description: "Please fill all fields to find matching universities",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setHasSearched(true);
     setFilters((prev) => ({
       ...prev,
       minMerit: 0,
@@ -2326,39 +2351,53 @@ const Index = () => {
           ref={universitiesRef}
           className="container py-12"
         >
-          <UniversityFilters
-            filters={filters}
-            onFiltersChange={setFilters}
-            totalResults={filteredUniversities.length}
-          />
+          {hasSearched ? (
+            <>
+              <UniversityFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                totalResults={filteredUniversities.length}
+              />
 
-          {/* University Grid */}
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredUniversities.map((university, index) => (
-              <div
-                key={university.id}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 0.05}s` }}
-              >
-                <UniversityCard
-                  university={university}
-                  isFavorite={favoriteIds.has(university.id)}
-                  isSelected={compareIds.has(university.id)}
-                  onToggleFavorite={() => handleToggleFavorite(university.id)}
-                  onToggleCompare={() => handleToggleCompare(university.id)}
-                  onViewDetails={() => setSelectedUniversity(university)}
-                />
+              {/* University Grid */}
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredUniversities.map((university, index) => (
+                  <div
+                    key={university.id}
+                    className="animate-fade-in"
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    <UniversityCard
+                      university={university}
+                      isFavorite={favoriteIds.has(university.id)}
+                      isSelected={compareIds.has(university.id)}
+                      onToggleFavorite={() => handleToggleFavorite(university.id)}
+                      onToggleCompare={() => handleToggleCompare(university.id)}
+                      onViewDetails={() => setSelectedUniversity(university)}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {filteredUniversities.length === 0 && (
+              {filteredUniversities.length === 0 && (
+                <div className="text-center py-16">
+                  <p className="text-lg text-muted-foreground">
+                    No universities found matching your criteria
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Try adjusting your filters or search query
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
             <div className="text-center py-16">
-              <p className="text-lg text-muted-foreground">
-                No universities found matching your criteria
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Try adjusting your filters or search query
+              <GraduationCap className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
+              <h3 className="text-xl font-semibold text-foreground mb-2">
+                Find Your Perfect University
+              </h3>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Fill in all the fields above (Marks, Fee Budget, City, and Discipline) to find universities matching your criteria
               </p>
             </div>
           )}
